@@ -1,0 +1,51 @@
+{
+  "_说明": "供应商数据交付校验规则配置 — 基于自动驾驶2D标注场景",
+  
+  "schema_rules": {
+    "required_fields": ["taskId", "imageUrl", "resolution", "objects"],
+    "field_types": {
+      "taskId": "string",
+      "imageUrl": "string",
+      "resolution": "object",
+      "resolution.width": "number",
+      "resolution.height": "number",
+      "objects": "array",
+      "objects[].id": "string",
+      "objects[].type": "string",
+      "objects[].bbox": "object",
+      "objects[].bbox.x": "number",
+      "objects[].bbox.y": "number",
+      "objects[].bbox.w": "number",
+      "objects[].bbox.h": "number",
+      "objects[].attributes.color": "string"
+    },
+    "optional_fields": ["objects[].attributes.occlusion", "objects[].trackId"]
+  },
+
+  "value_rules": {
+    "objects[].type": {
+      "allowed_values": ["car", "pedestrian", "cyclist", "traffic_light", "traffic_sign", "truck", "bus", "motorcycle"],
+      "error_message": "类型值非法，允许值见 allowed_values"
+    },
+    "objects[].attributes.color": {
+      "allowed_values": ["red", "yellow", "green", "unknown"],
+      "error_message": "交通灯颜色只能为 red/yellow/green/unknown"
+    },
+    "objects[].attributes.occlusion": {
+      "allowed_values": ["none", "partial", "heavy", "fully"],
+      "required_if_type": ["pedestrian", "cyclist", "car"]
+    }
+  },
+
+  "boundary_rules": {
+    "enabled": true,
+    "check_items": ["x>=0", "y>=0", "x+w<=分辨率宽度", "y+h<=分辨率高度", "w>0", "h>0"],
+    "error_message": "标注框坐标越界或尺寸非法"
+  },
+
+  "naming_rules": {
+    "file_pattern": "^[A-Z]{2}_\\d{4}-\\d{2}-\\d{2}_batch\\d{3}\\.json$",
+    "example": "GZ_2025-07-29_batch001.json",
+    "error_message": "文件命名格式不符合规范，参考示例"
+  }
+}

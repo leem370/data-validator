@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>供应商数据交付质量自动校验工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --primary: #1a73e8;
+  --primary-light: #e8f0fe;
+  --success: #0d904f;
+  --success-light: #e6f4ea;
+  --error: #d93025;
+  --error-light: #fce8e6;
+  --warning: #e37400;
+  --warning-light: #fef7e0;
+  --bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --text: #202124;
+  --text-secondary: #5f6368;
+  --border: #dadce0;
+  --border-focus: #1a73e8;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  background: linear-gradient(135deg, #f0f4ff 0%, #f8f9fa 50%, #f0f4ff 100%);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ===== Header ===== */
+.header {
+  background: linear-gradient(135deg, #1a3a5c 0%, #1a5276 40%, #1a73e8 100%);
+  color: white;
+  padding: 28px 32px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+  position: relative;
+  overflow: hidden;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,.08) 0%, transparent 70%);
+  animation: headerShine 8s linear infinite;
+}
+@keyframes headerShine {
+  0% { transform: translate(-30%, -30%) rotate(0deg); }
+  100% { transform: translate(-30%, -30%) rotate(360deg); }
+}
+.header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  position: relative;
+  z-index: 1;
+}
+.header .subtitle {
+  font-size: 14px;
+  opacity: .85;
+  margin-top: 6px;
+  position: relative;
+  z-index: 1;
+}
+.header .flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13px;
+  opacity: .9;
+  position: relative;
+  z-index: 1;
+}
+.flow-step {
+  background: rgba(255,255,255,.15);
+  padding: 6px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+}
+.flow-arrow { font-weight: 300; }
+
+/* ===== Main Container ===== */
+.main-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+}
+
+/* ===== Card ===== */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  overflow: hidden;
+  transition: box-shadow var(--transition);
+}
+.card:hover { box-shadow: var(--shadow-lg); }
+.card-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.card-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-header .icon { font-size: 20px; }
+.card-body { padding: 24px; }
+.card-body.collapsed { display: none; }
+
+/* ===== Upload Zone ===== */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--bg);
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--border-focus);
+  background: var(--primary-light);
+}
+.upload-zone .upload-icon {
+  font-size: 52px;
+  margin-bottom: 12px;
+  display: block;
+}
+.upload-zone .upload-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.upload-zone .upload-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.upload-zone input[type=file] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ===== Uploaded File Info ===== */
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--primary-light);
+  border-radius: var(--radius-sm);
+  margin-top: 16px;
+  font-size: 14px;
+}
+.file-info .file-icon { font-size: 20px; }
+.file-info .file-name { font-weight: 600; color: var(--primary); }
+.file-info .file-size { color: var(--text-secondary); font-size: 12px; }
+.file-info .remove-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all var(--transition);
+}
+.file-info .remove-btn:hover { background: #e8eaed; color: var(--error); }
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover:not(:disabled) { background: #1557b0; box-shadow: 0 2px 8px rgba(26,115,232,.3); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover:not(:disabled) { background: #0a7a3d; }
+.btn-outline {
+  background: white;
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover:not(:disabled) { background: var(--primary-light); border-color: var(--primary); }
+.btn-sm { padding: 6px 16px; font-size: 12px; border-radius: 16px; }
+
+/* ===== Progress ===== */
+.progress-container {
+  margin-top: 20px;
+  text-align: center;
+}
+.progress-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: #e8eaed;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #4285f4);
+  border-radius: 3px;
+  transition: width .3s ease;
+}
+.progress-text { font-size: 13px; color: var(--text-secondary); }
+.spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Results ===== */
+.result-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+.result-summary.pass { background: var(--success-light); }
+.result-summary.fail { background: var(--error-light); }
+.result-summary .result-icon { font-size: 36px; }
+.result-summary .result-text h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.result-summary.pass .result-text h3 { color: var(--success); }
+.result-summary.fail .result-text h3 { color: var(--error); }
+.result-summary .result-text p { font-size: 13px; color: var(--text-secondary); }
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+}
+.stat-card .stat-value { font-size: 28px; font-weight: 700; }
+.stat-card .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.stat-card.success .stat-value { color: var(--success); }
+.stat-card.error .stat-value { color: var(--error); }
+.stat-card.warning .stat-value { color: var(--warning); }
+
+/* ===== Table ===== */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table-wrap th {
+  background: #f1f3f4;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border-bottom: 2px solid var(--border);
+}
+.table-wrap td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  word-break: break-all;
+}
+.table-wrap tr:last-child td { border-bottom: none; }
+.table-wrap tr:hover td { background: #f8f9fa; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-error { background: var(--error-light); color: var(--error); }
+.badge-warning { background: var(--warning-light); color: var(--warning); }
+.badge-info { background: var(--primary-light); color: var(--primary); }
+
+/* ===== Action Bar ===== */
+.action-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 20px;
+}
+
+/* ===== Rules Config ===== */
+.config-editor {
+  width: 100%;
+  min-height: 400px;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "Menlo", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  resize: vertical;
+  background: #fafbfc;
+  color: var(--text);
+  tab-size: 2;
+}
+.config-editor:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(26,115,232,.15); }
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #323232;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 1000;
+  animation: toastIn .3s ease, toastOut .3s ease 2.7s forwards;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+@keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-16px); } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(-50%) translateY(-16px); } }
+
+/* ===== Empty State ===== */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+.empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; display: block; }
+.empty-state p { font-size: 14px; }
+
+/* ===== Footer ===== */
+.footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .header { padding: 20px 16px; }
+  .header h1 { font-size: 20px; }
+  .main-container { padding: 16px 12px; }
+  .card-body { padding: 16px; }
+  .upload-zone { padding: 32px 16px; }
+  .stats-row { flex-direction: column; gap: 8px; }
+  .action-bar { flex-direction: column; align-items: stretch; }
+  .result-summary { flex-direction: column; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header class="header">
+  <h1>🔍 供应商数据交付质量自动校验工具</h1>
+  <div class="subtitle">基于规则引擎的自动化数据质量检测，支持 Schema / 值域 / 坐标边界 / 命名规范 多维校验</div>
+  <div class="flow">
+    <span class="flow-step">📤 上传ZIP</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">🔎 自动校验</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">📋 错误报告</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">📥 导出CSV</span>
+  </div>
+</header>
+
+<!-- ===== Main ===== -->
+<div class="main-container">
+
+  <!-- Upload Card -->
+  <div class="card" id="uploadCard">
+    <div class="card-header">
+      <h2><span class="icon">📤</span> 上传数据包</h2>
+    </div>
+    <div class="card-body">
+      <div class="upload-zone" id="uploadZone">
+        <span class="upload-icon">📁</span>
+        <div class="upload-title">拖拽 ZIP 文件到此处，或点击上传</div>
+        <div class="upload-hint">支持包含多个 JSON 标注文件的 ZIP 压缩包</div>
+        <input type="file" id="fileInput" accept=".zip" />
+      </div>
+      <div class="file-info" id="fileInfo" style="display:none;">
+        <span class="file-icon">📄</span>
+        <span class="file-name" id="fileName"></span>
+        <span class="file-size" id="fileSize"></span>
+        <button class="remove-btn" id="removeFile" title="移除文件">✕</button>
+      </div>
+      <div class="action-bar" style="margin-top:16px;">
+        <button class="btn btn-primary" id="startCheckBtn" disabled>
+          <span>🔎</span> 开始校验
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Card (hidden initially) -->
+  <div class="card" id="progressCard" style="display:none;">
+    <div class="card-body">
+      <div class="progress-container">
+        <span class="spinner"></span>
+        <span class="progress-text" id="progressText">正在校验中...</span>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progressBar" style="width:0%;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Card (hidden initially) -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <div class="card-header">
+      <h2><span class="icon">📋</span> 校验结果</h2>
+    </div>
+    <div class="card-body">
+      <div class="result-summary" id="resultSummary">
+        <!-- filled dynamically -->
+      </div>
+      <div class="stats-row" id="statsRow">
+        <!-- filled dynamically -->
+      </div>
+      <div class="table-wrap" id="errorTableWrap" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>文件名</th>
+              <th>位置</th>
+              <th>错误类型</th>
+              <th>详情</th>
+            </tr>
+          </thead>
+          <tbody id="errorTableBody">
+          </tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <span class="empty-icon">✅</span>
+        <p>未发现任何错误，数据格式完全符合规范</p>
+      </div>
+      <div class="action-bar">
+        <button class="btn btn-success" id="exportCsvBtn" style="display:none;">
+          <span>📥</span> 导出CSV报告
+        </button>
+        <button class="btn btn-outline" id="resetBtn">
+          <span>🔄</span> 重新校验
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules Config Card -->
+  <div class="card" id="configCard">
+    <div class="card-header" id="configToggle">
+      <h2><span class="icon">⚙️</span> 校验规则配置 <span style="font-size:12px;font-weight:400;color:var(--text-secondary);">（可编辑 / 可导入导出）</span></h2>
+      <span style="font-size:12px;color:var(--text-secondary);">点击展开 ▼</span>
+    </div>
+    <div class="card-body collapsed" id="configBody">
+      <div class="action-bar" style="margin-bottom:16px;">
+        <button class="btn btn-outline btn-sm" id="loadRulesBtn">
+          <span>📂</span> 导入 rules.json
+        </button>
+        <button class="btn btn-outline btn-sm" id="exportRulesBtn">
+          <span>💾</span> 导出规则配置
+        </button>
+        <button class="btn btn-outline btn-sm" id="resetRulesBtn">
+          <span>↩️</span> 恢复默认
+        </button>
+      </div>
+      <textarea class="config-editor" id="configEditor" spellcheck="false"></textarea>
+      <div class="action-bar" style="margin-top:12px;">
+        <button class="btn btn-primary btn-sm" id="applyRulesBtn">
+          <span>✅</span> 应用配置
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== Footer ===== -->
+<footer class="footer">
+  供应商数据交付质量自动校验工具 · 纯前端本地运行 · 数据不上传服务器
+</footer>
+
+<!-- ===== Hidden file input for rules import ===== -->
+<input type="file" id="rulesFileInput" accept=".json" style="display:none;" />
+
+<script>
+// ============================================================
+// 默认校验规则配置
+// ============================================================
+const DEFAULT_RULES = {
+  "_说明": "这是一个可直接用于供应商数据交付校验的规则配置模板，基于自动驾驶2D标注场景",
+
+  "schema_rules": {
+    "required_fields": ["taskId", "imageUrl", "resolution", "objects"],
+    "field_types": {
+      "taskId": "string",
+      "imageUrl": "string",
+      "resolution": "object",
+      "resolution.width": "number",
+      "resolution.height": "number",
+      "objects": "array",
+      "objects[].id": "string",
+      "objects[].type": "string",
+      "objects[].bbox": "object",
+      "objects[].bbox.x": "number",
+      "objects[].bbox.y": "number",
+      "objects[].bbox.w": "number",
+      "objects[].bbox.h": "number",
+      "objects[].attributes.color": "string"
+    },
+    "optional_fields": ["objects[].attributes.occlusion", "objects[].trackId"]
+  },
+
+  "value_rules": {
+    "objects[].type": {
+      "allowed_values": ["car", "pedestrian", "cyclist", "traffic_light", "traffic_sign", "truck", "bus", "motorcycle"],
+      "error_message": "类型值非法，允许值见 allowed_values"
+    },
+    "objects[].attributes.color": {
+      "allowed_values": ["red", "yellow", "green", "unknown"],
+      "error_message": "交通灯颜色只能为 red/yellow/green/unknown"
+    },
+    "objects[].attributes.occlusion": {
+      "allowed_values": ["none", "partial", "heavy", "fully"],
+      "required_if_type": ["pedestrian", "cyclist", "car"]
+    }
+  },
+
+  "boundary_rules": {
+    "enabled": true,
+    "check_items": ["x>=0", "y>=0", "x+w<=分辨率宽度", "y+h<=分辨率高度", "w>0", "h>0"],
+    "error_message": "标注框坐标越界或尺寸非法"
+  },
+
+  "naming_rules": {
+    "file_pattern": "^[A-Z]{2}_\\d{4}-\\d{2}-\\d{2}_batch\\d{3}\\.json$",
+    "example": "GZ_2025-07-29_batch001.json",
+    "error_message": "文件命名格式不符合规范，参考示例"
+  }
+};
+
+// ============================================================
+// 全局状态
+// ============================================================
+let currentRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+let selectedFile = null;
+let allErrors = [];
+
+// ============================================================
+// 初始化
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  initConfigEditor();
+  initUploadZone();
+  initButtons();
+});
+
+// ============================================================
+// 配置编辑器
+// ============================================================
+function initConfigEditor() {
+  const editor = document.getElementById('configEditor');
+  editor.value = JSON.stringify(currentRules, null, 2);
+
+  // Toggle config panel
+  document.getElementById('configToggle').addEventListener('click', () => {
+    const body = document.getElementById('configBody');
+    const toggle = document.getElementById('configToggle').querySelector('span:last-child');
+    body.classList.toggle('collapsed');
+    toggle.textContent = body.classList.contains('collapsed') ? '点击展开 ▼' : '点击收起 ▲';
+  });
+
+  // Load external rules file
+  document.getElementById('loadRulesBtn').addEventListener('click', () => {
+    document.getElementById('rulesFileInput').click();
+  });
+  document.getElementById('rulesFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rules = JSON.parse(reader.result);
+        validateRulesConfig(rules); // will throw if invalid
+        document.getElementById('configEditor').value = JSON.stringify(rules, null, 2);
+        showToast('✅ 规则文件加载成功');
+        e.target.value = '';
+      } catch (err) {
+        showToast('❌ 规则文件格式错误: ' + err.message);
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Export rules
+  document.getElementById('exportRulesBtn').addEventListener('click', () => {
+    try {
+      const rules = JSON.parse(document.getElementById('configEditor').value);
+      const blob = new Blob([JSON.stringify(rules, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, 'rules.json');
+      showToast('✅ 规则配置已导出');
+    } catch (err) {
+      showToast('❌ 当前配置JSON格式无效: ' + err.message);
+    }
+  });
+
+  // Reset rules
+  document.getElementById('resetRulesBtn').addEventListener('click', () => {
+    document.getElementById('configEditor').value = JSON.stringify(DEFAULT_RULES, null, 2);
+    currentRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+    showToast('✅ 已恢复默认规则配置');
+  });
+
+  // Apply rules
+  document.getElementById('applyRulesBtn').addEventListener('click', () => {
+    try {
+      const rules = JSON.parse(document.getElementById('configEditor').value);
+      validateRulesConfig(rules);
+      currentRules = rules;
+      showToast('✅ 规则配置已应用');
+    } catch (err) {
+      showToast('❌ 规则配置无效: ' + err.message);
+    }
+  });
+}
+
+function validateRulesConfig(rules) {
+  if (!rules || typeof rules !== 'object') throw new Error('配置必须是对象');
+  // Basic structure check
+  if (rules.schema_rules && !rules.schema_rules.required_fields) {
+    throw new Error('schema_rules.required_fields 缺失');
+  }
+}
+
+// ============================================================
+// 上传区域
+// ============================================================
+function initUploadZone() {
+  const zone = document.getElementById('uploadZone');
+  const input = document.getElementById('fileInput');
+
+  // Click to upload
+  zone.addEventListener('click', (e) => {
+    if (e.target === input) return;
+    input.click();
+  });
+
+  // File selected
+  input.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFileSelect(e.target.files[0]);
+    }
+  });
+
+  // Drag & drop
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  });
+
+  // Remove file
+  document.getElementById('removeFile').addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetUpload();
+  });
+}
+
+function handleFileSelect(file) {
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    showToast('⚠️ 请上传 .zip 格式的压缩文件');
+    return;
+  }
+  selectedFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatFileSize(file.size);
+  document.getElementById('fileInfo').style.display = 'flex';
+  document.getElementById('startCheckBtn').disabled = false;
+  document.getElementById('uploadZone').style.display = 'none';
+
+  // Hide previous results
+  document.getElementById('resultsCard').style.display = 'none';
+}
+
+function resetUpload() {
+  selectedFile = null;
+  allErrors = [];
+  document.getElementById('fileInfo').style.display = 'none';
+  document.getElementById('uploadZone').style.display = '';
+  document.getElementById('startCheckBtn').disabled = true;
+  document.getElementById('resultsCard').style.display = 'none';
+  document.getElementById('progressCard').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ============================================================
+// 按钮事件
+// ============================================================
+function initButtons() {
+  document.getElementById('startCheckBtn').addEventListener('click', startValidation);
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+  document.getElementById('resetBtn').addEventListener('click', resetUpload);
+}
+
+// ============================================================
+// 校验流程
+// ============================================================
+async function startValidation() {
+  if (!selectedFile) return;
+
+  // Sync rules from editor before validation
+  try {
+    const editorRules = JSON.parse(document.getElementById('configEditor').value);
+    validateRulesConfig(editorRules);
+    currentRules = editorRules;
+  } catch (err) {
+    showToast('⚠️ 当前规则配置无效，将使用上次有效配置');
+  }
+
+  // Show progress
+  document.getElementById('progressCard').style.display = 'block';
+  document.getElementById('resultsCard').style.display = 'none';
+  document.getElementById('progressText').textContent = '正在解析 ZIP 文件...';
+  document.getElementById('progressBar').style.width = '10%';
+
+  allErrors = [];
+
+  try {
+    // Read ZIP file
+    const arrayBuffer = await readFileAsArrayBuffer(selectedFile);
+    document.getElementById('progressText').textContent = '正在加载 ZIP 内容...';
+    document.getElementById('progressBar').style.width = '25%';
+
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const jsonFiles = [];
+
+    // Collect all JSON files from the ZIP
+    zip.forEach((relativePath, zipEntry) => {
+      if (zipEntry.dir) return;
+      // Skip macOS metadata and hidden files
+      if (relativePath.startsWith('__MACOSX/') || relativePath.startsWith('.')) return;
+      const fileName = relativePath.split('/').pop();
+      if (fileName.endsWith('.json') && !fileName.startsWith('.')) {
+        jsonFiles.push({ relativePath, zipEntry, fileName });
+      }
+    });
+
+    if (jsonFiles.length === 0) {
+      document.getElementById('progressCard').style.display = 'none';
+      showToast('⚠️ ZIP 文件中未找到 JSON 文件');
+      return;
+    }
+
+    document.getElementById('progressText').textContent = `找到 ${jsonFiles.length} 个 JSON 文件，开始逐文件校验...`;
+    document.getElementById('progressBar').style.width = '35%';
+
+    // Process each file
+    for (let i = 0; i < jsonFiles.length; i++) {
+      const { relativePath, zipEntry, fileName } = jsonFiles[i];
+      const progress = 35 + Math.round((i / jsonFiles.length) * 55);
+      document.getElementById('progressBar').style.width = progress + '%';
+      document.getElementById('progressText').textContent =
+        `正在校验: ${fileName} (${i + 1}/${jsonFiles.length})...`;
+
+      try {
+        const content = await zipEntry.async('text');
+        const fileErrors = validateFile(fileName, content, relativePath);
+        allErrors.push(...fileErrors);
+      } catch (err) {
+        allErrors.push({
+          file: fileName,
+          path: '/',
+          type: '解析错误',
+          detail: `无法解析 JSON 文件: ${err.message}`
+        });
+      }
+
+      // Small delay for UX (progress bar animation)
+      await sleep(50);
+    }
+
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressText').textContent = '校验完成！';
+    await sleep(300);
+    document.getElementById('progressCard').style.display = 'none';
+
+    displayResults();
+
+  } catch (err) {
+    document.getElementById('progressCard').style.display = 'none';
+    showToast('❌ 校验过程出错: ' + err.message);
+    console.error(err);
+  }
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================================
+// 单文件校验逻辑
+// ============================================================
+function validateFile(fileName, content, relativePath) {
+  const errors = [];
+  const lines = content.split('\n');
+
+  // 1. 文件命名校验
+  const namingErrors = validateNaming(fileName);
+  errors.push(...namingErrors);
+
+  // 2. JSON 解析
+  let data;
+  try {
+    data = JSON.parse(content);
+  } catch (err) {
+    const lineNum = findJsonParseErrorLine(content, err);
+    errors.push({
+      file: fileName,
+      path: `#${lineNum || '?'}`,
+      type: 'JSON解析错误',
+      detail: err.message
+    });
+    return errors;
+  }
+
+  // 3. Schema 校验 (必填字段 + 类型)
+  const schemaErrors = validateSchema(data, fileName, lines);
+  errors.push(...schemaErrors);
+
+  // 4. 值域校验
+  const valueErrors = validateValues(data, fileName, lines);
+  errors.push(...valueErrors);
+
+  // 5. 坐标边界校验
+  const boundaryErrors = validateBoundaries(data, fileName, lines);
+  errors.push(...boundaryErrors);
+
+  return errors;
+}
+
+// ============================================================
+// 1. 命名校验
+// ============================================================
+function validateNaming(fileName) {
+  const errors = [];
+  const namingRules = currentRules.naming_rules;
+  if (!namingRules || !namingRules.file_pattern) return errors;
+
+  try {
+    const pattern = new RegExp(namingRules.file_pattern);
+    if (!pattern.test(fileName)) {
+      errors.push({
+        file: fileName,
+        path: '文件名',
+        type: '命名不规范',
+        detail: `${namingRules.error_message || '文件命名格式不符合规范'}（示例: ${namingRules.example || ''}）`
+      });
+    }
+  } catch (err) {
+    // Invalid regex pattern, skip naming check
+  }
+
+  return errors;
+}
+
+// ============================================================
+// 2. Schema 校验
+// ============================================================
+function validateSchema(data, fileName, lines) {
+  const errors = [];
+  const schemaRules = currentRules.schema_rules;
+  if (!schemaRules) return errors;
+
+  // 2a. 必填字段检查
+  const requiredFields = schemaRules.required_fields || [];
+  for (const field of requiredFields) {
+    if (!(field in data) || data[field] === null || data[field] === undefined) {
+      const lineNum = findFieldLine(lines, field);
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : field,
+        type: '字段缺失',
+        detail: `缺少必填字段 "${field}"`
+      });
+    }
+  }
+
+  // If required fields are missing, don't go deeper for those paths
+  if (errors.some(e => e.type === '字段缺失' && ['objects', 'resolution'].includes(e.path.replace('#', '')))) {
+    return errors;
+  }
+
+  // 2b. 字段类型检查
+  const fieldTypes = schemaRules.field_types || {};
+  const optionalFields = schemaRules.optional_fields || [];
+
+  // Check top-level types
+  for (const [fieldPath, expectedType] of Object.entries(fieldTypes)) {
+    const value = getValueByPath(data, fieldPath);
+
+    // Skip if value is undefined and field is optional
+    if (value === undefined) {
+      if (optionalFields.includes(fieldPath)) continue;
+      // Check if parent is undefined
+      const parentPath = fieldPath.replace(/\.[^.]+$/, '').replace(/\[\]$/, '');
+      if (parentPath !== fieldPath && getValueByPath(data, parentPath) === undefined) continue;
+
+      // If it's a nested path like objects[].x and objects array is empty, skip
+      if (fieldPath.includes('[]') && Array.isArray(getValueByPath(data, fieldPath.split('[].')[0]))) {
+        const arr = getValueByPath(data, fieldPath.split('[].')[0]);
+        if (arr.length === 0) continue;
+      }
+    }
+
+    if (value !== undefined) {
+      // For array fields with [] notation, we need to check each element
+      if (fieldPath.includes('[]')) {
+        const [arrayPath, subPath] = fieldPath.split('[].');
+        const arr = getValueByPath(data, arrayPath);
+        if (Array.isArray(arr)) {
+          for (let i = 0; i < arr.length; i++) {
+            const elemValue = subPath ? getValueByPath(arr[i], subPath) : arr[i];
+            if (elemValue !== undefined && !checkType(elemValue, expectedType)) {
+              const actualPath = fieldPath.replace('[]', `[${i}]`);
+              const lineNum = findValueLine(lines, elemValue, actualPath, data);
+              errors.push({
+                file: fileName,
+                path: lineNum ? `#${lineNum}` : actualPath,
+                type: '类型错误',
+                detail: `"${actualPath}" 期望类型 ${expectedType}，实际为 ${typeof elemValue}`
+              });
+            }
+          }
+        }
+      } else {
+        if (!checkType(value, expectedType)) {
+          const lineNum = findFieldLine(lines, fieldPath);
+          errors.push({
+            file: fileName,
+            path: lineNum ? `#${lineNum}` : fieldPath,
+            type: '类型错误',
+            detail: `"${fieldPath}" 期望类型 ${expectedType}，实际为 ${typeof value}`
+          });
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+function checkType(value, expectedType) {
+  switch (expectedType) {
+    case 'string': return typeof value === 'string';
+    case 'number': return typeof value === 'number' && !isNaN(value);
+    case 'object': return typeof value === 'object' && value !== null && !Array.isArray(value);
+    case 'array': return Array.isArray(value);
+    case 'boolean': return typeof value === 'boolean';
+    default: return true;
+  }
+}
+
+// ============================================================
+// 3. 值域校验
+// ============================================================
+function validateValues(data, fileName, lines) {
+  const errors = [];
+  const valueRules = currentRules.value_rules;
+  if (!valueRules) return errors;
+
+  for (const [fieldPath, rule] of Object.entries(valueRules)) {
+    if (!rule.allowed_values) continue;
+
+    if (fieldPath.includes('[]')) {
+      const [arrayPath, subPath] = fieldPath.split('[].');
+      const arr = getValueByPath(data, arrayPath);
+      if (!Array.isArray(arr)) continue;
+
+      for (let i = 0; i < arr.length; i++) {
+        const value = subPath ? getValueByPath(arr[i], subPath) : arr[i];
+        const actualPath = fieldPath.replace('[]', `[${i}]`);
+
+        // Check if value exists
+        if (value === undefined || value === null) {
+          // Check required_if_type
+          if (rule.required_if_type) {
+            const objType = arr[i]?.type;
+            if (objType && rule.required_if_type.includes(objType)) {
+              const lineNum = findObjectLine(lines, arr[i], i, data);
+              errors.push({
+                file: fileName,
+                path: lineNum ? `#${lineNum}` : `${actualPath}`,
+                type: '字段缺失',
+                detail: `"${actualPath}" 在类型为 "${objType}" 时必填（允许值: ${rule.allowed_values.join(', ')}）`
+              });
+            }
+          }
+          continue;
+        }
+
+        // Check allowed values
+        if (!rule.allowed_values.includes(value)) {
+          const lineNum = findValueLine(lines, value, actualPath, data);
+          errors.push({
+            file: fileName,
+            path: lineNum ? `#${lineNum}` : actualPath,
+            type: '属性非法',
+            detail: `${actualPath} = "${value}"，${rule.error_message || '值不在允许范围内'}（允许值: ${rule.allowed_values.join(', ')}）`
+          });
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+// ============================================================
+// 4. 坐标边界校验
+// ============================================================
+function validateBoundaries(data, fileName, lines) {
+  const errors = [];
+  const boundaryRules = currentRules.boundary_rules;
+  if (!boundaryRules || !boundaryRules.enabled) return errors;
+  if (!data.resolution || typeof data.resolution.width !== 'number' || typeof data.resolution.height !== 'number') {
+    // Can't do boundary check without resolution
+    return errors;
+  }
+
+  const imgW = data.resolution.width;
+  const imgH = data.resolution.height;
+  const objects = data.objects;
+
+  if (!Array.isArray(objects)) return errors;
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (!obj || !obj.bbox) continue;
+
+    const { x, y, w, h } = obj.bbox;
+    const path = `objects[${i}].bbox`;
+
+    // Determine line number for this object
+    const lineNum = findObjectLine(lines, obj, i, data);
+
+    // Check x >= 0
+    if (typeof x === 'number' && x < 0) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}.x = ${x} < 0，标注框左边界超出图片范围（${boundaryRules.error_message || '坐标越界'}）`
+      });
+    }
+
+    // Check y >= 0
+    if (typeof y === 'number' && y < 0) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}.y = ${y} < 0，标注框上边界超出图片范围（${boundaryRules.error_message || '坐标越界'}）`
+      });
+    }
+
+    // Check w > 0
+    if (typeof w === 'number' && w <= 0) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}.w = ${w} ≤ 0，标注框宽度非法（${boundaryRules.error_message || '尺寸非法'}）`
+      });
+    }
+
+    // Check h > 0
+    if (typeof h === 'number' && h <= 0) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}.h = ${h} ≤ 0，标注框高度非法（${boundaryRules.error_message || '尺寸非法'}）`
+      });
+    }
+
+    // Check x + w <= image width
+    if (typeof x === 'number' && typeof w === 'number' && w > 0 && x + w > imgW) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}: x+w = ${x}+${w} = ${x + w} > 图片宽度 ${imgW}（${boundaryRules.error_message || '坐标越界'}）`
+      });
+    }
+
+    // Check y + h <= image height
+    if (typeof y === 'number' && typeof h === 'number' && h > 0 && y + h > imgH) {
+      errors.push({
+        file: fileName,
+        path: lineNum ? `#${lineNum}` : path,
+        type: '坐标越界',
+        detail: `${path}: y+h = ${y}+${h} = ${y + h} > 图片高度 ${imgH}（${boundaryRules.error_message || '坐标越界'}）`
+      });
+    }
+  }
+
+  return errors;
+}
+
+// ============================================================
+// 辅助: 通过路径获取值
+// ============================================================
+function getValueByPath(obj, path) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  // Handle array notation - but for getValueByPath, we just handle simple dot paths
+  // since [] notation is handled separately in calling code
+  const parts = path.replace(/\[\]/g, '').split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (!part) continue;
+    if (current === null || current === undefined || typeof current !== 'object') return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+// ============================================================
+// 行号查找工具
+// ============================================================
+function findFieldLine(lines, fieldName) {
+  // Search for "fieldName": pattern
+  const pattern = new RegExp(`"${escapeRegex(fieldName)}"\\s*:`);
+  for (let i = 0; i < lines.length; i++) {
+    if (pattern.test(lines[i])) return i + 1;
+  }
+  return null;
+}
+
+function findObjectLine(lines, targetObj, objIndex, rootData) {
+  // Try to find a unique identifier for this object
+  if (targetObj.id) {
+    const pattern = new RegExp(`"id"\\s*:\\s*"${escapeRegex(String(targetObj.id))}"`);
+    for (let i = 0; i < lines.length; i++) {
+      if (pattern.test(lines[i])) return i + 1;
+    }
+  }
+  // Fallback: find by bbox coordinates
+  if (targetObj.bbox && typeof targetObj.bbox.x === 'number') {
+    let foundFirst = false;
+    let foundCount = 0;
+    const bboxPattern = /"bbox"\s*:/;
+    for (let i = 0; i < lines.length; i++) {
+      if (bboxPattern.test(lines[i])) {
+        foundFirst = true;
+        if (foundCount === objIndex) return i + 1;
+        foundCount++;
+      }
+    }
+  }
+  return null;
+}
+
+function findValueLine(lines, value, path, rootData) {
+  // Search for the value in the file
+  const searchStr = typeof value === 'string' ? `"${value}"` : String(value);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(searchStr)) return i + 1;
+  }
+  return null;
+}
+
+function findJsonParseErrorLine(content, err) {
+  // Try to extract line number from JSON parse error message
+  const match = err.message.match(/line\s*(\d+)|position\s*(\d+)/i);
+  if (match) {
+    const lineNum = parseInt(match[1] || match[2]);
+    if (!isNaN(lineNum) && match[1]) return lineNum;
+    // If position-based, count newlines
+    if (!isNaN(lineNum) && match[2]) {
+      const pos = parseInt(match[2]);
+      return (content.substring(0, pos).match(/\n/g) || []).length + 1;
+    }
+  }
+  return null;
+}
+
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ============================================================
+// 结果显示
+// ============================================================
+function displayResults() {
+  const resultsCard = document.getElementById('resultsCard');
+  resultsCard.style.display = 'block';
+
+  const totalFiles = new Set(allErrors.map(e => e.file)).size;
+  // Also count files that were checked (from error list + consider naming errors)
+  const filesChecked = totalFiles || (selectedFile ? 1 : 0);
+
+  const errorCount = allErrors.filter(e => e.type !== '命名不规范').length;
+  const warningCount = allErrors.filter(e => e.type === '命名不规范').length;
+  const hasErrors = errorCount > 0;
+
+  // Summary
+  const summary = document.getElementById('resultSummary');
+  summary.className = 'result-summary ' + (hasErrors ? 'fail' : 'pass');
+  summary.innerHTML = hasErrors ? `
+    <span class="result-icon">❌</span>
+    <div class="result-text">
+      <h3>校验不通过 — 发现 ${errorCount} 个错误${warningCount > 0 ? `，${warningCount} 个警告` : ''}</h3>
+      <p>请根据下方错误清单修正数据后重新提交</p>
+    </div>
+  ` : `
+    <span class="result-icon">✅</span>
+    <div class="result-text">
+      <h3>校验通过 — 数据格式完全符合规范</h3>
+      <p>${warningCount > 0 ? `有 ${warningCount} 个命名格式警告，但不影响数据完整性` : '允许进入人工质检环节'}</p>
+    </div>
+  `;
+
+  // Stats
+  const statsRow = document.getElementById('statsRow');
+  const typeCounts = {};
+  allErrors.forEach(e => {
+    typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
+  });
+
+  let statsHTML = `
+    <div class="stat-card">
+      <div class="stat-value">${filesChecked}</div>
+      <div class="stat-label">校验文件数</div>
+    </div>
+    <div class="stat-card ${hasErrors ? 'error' : 'success'}">
+      <div class="stat-value">${errorCount}</div>
+      <div class="stat-label">错误数</div>
+    </div>
+    <div class="stat-card ${warningCount > 0 ? 'warning' : ''}">
+      <div class="stat-value">${warningCount}</div>
+      <div class="stat-label">警告数</div>
+    </div>
+  `;
+  statsRow.innerHTML = statsHTML;
+
+  // Error table
+  const tableWrap = document.getElementById('errorTableWrap');
+  const tableBody = document.getElementById('errorTableBody');
+  const emptyState = document.getElementById('emptyState');
+
+  if (allErrors.length > 0) {
+    tableWrap.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    // Sort errors: real errors first, then warnings
+    const sortedErrors = [...allErrors].sort((a, b) => {
+      const order = { '命名不规范': 1 };
+      return (order[a.type] || 0) - (order[b.type] || 0);
+    });
+
+    tableBody.innerHTML = sortedErrors.map(e => {
+      let typeBadgeClass = 'badge-error';
+      if (e.type === '命名不规范') typeBadgeClass = 'badge-warning';
+      else if (e.type === '字段缺失') typeBadgeClass = 'badge-info';
+
+      return `
+        <tr>
+          <td><strong>${escapeHTML(e.file)}</strong></td>
+          <td><code>${escapeHTML(String(e.path))}</code></td>
+          <td><span class="badge ${typeBadgeClass}">${escapeHTML(e.type)}</span></td>
+          <td>${escapeHTML(e.detail)}</td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    tableWrap.style.display = 'none';
+    emptyState.style.display = 'block';
+  }
+
+  // Export button
+  document.getElementById('exportCsvBtn').style.display = allErrors.length > 0 ? 'inline-flex' : 'none';
+
+  // Scroll to results
+  resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================
+// CSV 导出
+// ============================================================
+function exportCsv() {
+  if (allErrors.length === 0) return;
+
+  const headers = ['文件名', '位置', '错误类型', '详情'];
+  const rows = allErrors.map(e => [
+    e.file,
+    String(e.path),
+    e.type,
+    e.detail
+  ]);
+
+  // Build CSV with BOM for Excel compatibility
+  const BOM = '﻿';
+  let csv = BOM;
+  csv += headers.map(h => `"${h}"`).join(',') + '\n';
+  csv += rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  downloadBlob(blob, `数据校验报告_${timestamp}.csv`);
+  showToast('✅ CSV 报告已下载');
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// 通用工具
+// ============================================================
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function showToast(message) {
+  // Remove existing toast
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, 3000);
+}
+</script>
+
+</body>
+</html>
